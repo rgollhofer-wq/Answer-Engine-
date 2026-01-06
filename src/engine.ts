@@ -233,7 +233,11 @@ export function runEngine(input: EngineInput): EngineResponse {
     lastLocation: input.state?.lastLocation,
     mode: input.state?.mode ?? "local",
   };
-
+  // Normalize candidate buckets so the engine can reason safely
+  const candidates = input.candidates ?? {};
+  const provider = candidates.provider ?? [];
+  const feed = candidates.feed ?? [];
+  const publicCands = candidates.public ?? [];
   const locationResult = resolveLocation(input, state);
   if (locationResult.askLocation) {
     return {
