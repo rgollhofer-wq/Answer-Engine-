@@ -66,18 +66,17 @@ const MAX_LOCAL_RADIUS_MILES = 25;
 const TIE_SCORE_DELTA = 0.02;
 const DISTANCE_TIE_BREAK_MILES = 5;
 
-function computeScore(candidate: Candidate): number {
-  const authority = clamp(candidate.authority);
-  const agreement = clamp(candidate.agreement);
-  const freshness = clamp(candidate.freshness);
-  return 0.5 * authority + 0.3 * agreement + 0.2 * freshness;
+function clamp(value: number): number {
+  if (Number.isNaN(value) || !Number.isFinite(value)) return 0;
+  return Math.max(0, Math.min(1, value));
 }
 
-function clamp(value: number): number {
-  if (Number.isNaN(value) || !Number.isFinite(value)) {
-    return 0;
-  }
-  return Math.max(0, Math.min(1, value));
+function computeScore(candidate: Candidate): number {
+  return (
+    0.5 * clamp(candidate.authority) +
+    0.3 * clamp(candidate.agreement) +
+    0.2 * clamp(candidate.freshness)
+  );
 }
 
 function normalize(text: string): string {
@@ -114,10 +113,7 @@ function resolveLocation(
   if (!state.locationAsked) {
     return {
       askLocation: true,
-      state: {
-        ...state,
-        locationAsked: true,
-      },
+      state: { ...state, locationAsked: true },
     };
   }
 
@@ -130,19 +126,17 @@ function resolveLocation(
 function collectCandidates(
   candidates?: EngineInput["candidates"]
 ): Candidate[] {
-  const provider = candidates?.provider ?? [];
-  const feed = candidates?.feed ?? [];
-  const publicListings = candidates?.public ?? [];
-  return [...provider, ...feed, ...publicListings];
+  return [
+    ...(candidates?.provider ?? []),
+    ...(candidates?.feed ?? []),
+    ...(candidates?.public ?? []),
+  ];
 }
 
 function filterLocalCandidates(candidates: Candidate[]): Candidate[] {
-  return candidates.filter((candidate) => {
-    if (candidate.distanceMiles === undefined || candidate.distanceMiles === null) {
-      return true;
-    }
-    return candidate.distanceMiles <= MAX_LOCAL_RADIUS_MILES;
-  });
+  return candidates.filter(
+    (c) => c.distanceMiles == null || c.distanceMiles <= MAX_LOCAL_RADIUS_MILES
+  );
 }
 
 function narrowByClarification(
@@ -150,9 +144,9 @@ function narrowByClarification(
   clarificationAnswer: string
 ): Candidate[] {
   const answer = normalize(clarificationAnswer);
-  return candidates.filter((candidate) => {
-    const id = normalize(candidate.id);
-    const name = normalize(candidate.name);
+  return candidates.filter((c) => {
+    const id = normalize(c.id);
+    const name = normalize(c.name);
     return (
       id === answer ||
       name === answer ||
@@ -164,50 +158,45 @@ function narrowByClarification(
 
 function sortCandidates(candidates: Candidate[]): Candidate[] {
   return [...candidates].sort((a, b) => {
-    const scoreA = computeScore(a);
-    const scoreB = computeScore(b);
-    if (scoreA !== scoreB) {
-      return scoreB - scoreA;
-    }
-    const distanceA = a.distanceMiles ?? Number.POSITIVE_INFINITY;
-    const distanceB = b.distanceMiles ?? Number.POSITIVE_INFINITY;
-    return distanceA - distanceB;
+    const diff = computeScore(b) - computeScore(a);
+    if (diff !== 0) return diff;
+    return (a.distanceMiles ?? Infinity) - (b.distanceMiles ?? Infinity);
   });
 }
 
-function resolveTie(sorted: Candidate[]): { primary?: Candidate; tied: Candidate[] } {
-  if (sorted.length === 0) {
-    return { tied: [] };
-  }
+function resolveTie(sorted: Candidate[]): {
+  primary?: Candidate;
+  tied: Candidate[];
+} {
+  if (sorted.length === 0) return { tied: [] };
+
   const topScore = computeScore(sorted[0]);
   const tied = sorted.filter(
-    (candidate) => Math.abs(computeScore(candidate) - topScore) <= TIE_SCORE_DELTA
+    (c) => Math.abs(computeScore(c) - topScore) <= TIE_SCORE_DELTA
   );
-  if (tied.length <= 1) {
-    return { primary: sorted[0], tied };
-  }
 
-  const sortedByDistance = [...tied].sort((a, b) => {
-    const distanceA = a.distanceMiles ?? Number.POSITIVE_INFINITY;
-    const distanceB = b.distanceMiles ?? Number.POSITIVE_INFINITY;
-    return distanceA - distanceB;
-  });
+  if (tied.length <= 1) return { primary: sorted[0], tied };
 
-  const closest = sortedByDistance[0];
-  const farthest = sortedByDistance[sortedByDistance.length - 1];
-  const distanceA = closest.distanceMiles ?? 0;
-  const distanceB = farthest.distanceMiles ?? 0;
+  const byDistance = [...tied].sort(
+    (a, b) => (a.distanceMiles ?? Infinity) - (b.distanceMiles ?? Infinity)
+  );
 
-  if (distanceB - distanceA > DISTANCE_TIE_BREAK_MILES) {
-    return { primary: closest, tied };
+  const delta =
+    (byDistance.at(-1)?.distanceMiles ?? 0) -
+    (byDistance[0]?.distanceMiles ?? 0);
+
+  if (delta > DISTANCE_TIE_BREAK_MILES) {
+    return { primary: byDistance[0], tied };
   }
 
   return { tied };
 }
 
 function buildClarificationQuestion(options: Candidate[]): string {
-  const names = options.slice(0, 3).map((candidate) => candidate.name);
-  return `Which one do you mean: ${names.join(" or ")}?`;
+  return `Which one do you mean: ${options
+    .slice(0, 3)
+    .map((c) => c.name)
+    .join(" or ")}?`;
 }
 
 function buildAnswerMessage(
@@ -221,14 +210,15 @@ function stopMessage(): string {
   return "Not confirmed. Next actions: expand radius, watch/notify, or switch resolution mode.";
 }
 
-function hasConfirmedScope(candidate: Candidate, resolvedLocation?: string): boolean {
-  if (!resolvedLocation) {
-    return false;
-  }
-  if (!candidate.availability) {
-    return false;
-  }
-  return candidate.openNow === true;
+function hasConfirmedScope(
+  candidate: Candidate,
+  resolvedLocation?: string
+): boolean {
+  return !!(
+    resolvedLocation &&
+    candidate.availability &&
+    candidate.openNow === true
+  );
 }
 
 export function runEngine(input: EngineInput): EngineResponse {
@@ -238,11 +228,7 @@ export function runEngine(input: EngineInput): EngineResponse {
     lastLocation: input.state?.lastLocation,
     mode: input.state?.mode ?? "local",
   };
-  // Normalize candidate buckets so the engine can reason safely
-  const candidates = input.candidates ?? {};
-  const provider = candidates.provider ?? [];
-  const feed = candidates.feed ?? [];
-  const publicCands = candidates.public ?? [];
+
   const locationResult = resolveLocation(input, state);
   if (locationResult.askLocation) {
     return {
@@ -252,7 +238,8 @@ export function runEngine(input: EngineInput): EngineResponse {
     };
   }
 
-  const resolvedLocation = locationResult.resolvedLocation ?? state.lastLocation;
+  const resolvedLocation =
+    locationResult.resolvedLocation ?? state.lastLocation;
   if (!resolvedLocation) {
     return {
       type: "stop",
@@ -264,40 +251,49 @@ export function runEngine(input: EngineInput): EngineResponse {
 
   const locationChanged =
     state.lastLocation && resolvedLocation !== state.lastLocation;
+
   const nextState: EngineState = {
     ...locationResult.state,
     lastLocation: resolvedLocation,
-    mode: input.allowNational ? "national" : locationResult.state.mode ?? "local",
+    mode: input.allowNational ? "national" : state.mode ?? "local",
   };
 
-let candidatesList = collectCandidates(input.candidates);
-if (nextState.mode !== "national") {
-  candidatesList = filterLocalCandidates(candidatesList);
-}
-
-  if (state.clarificationAsked && input.clarificationAnswer) {
-  candidatesList = narrowByClarification(candidatesList, input.clarificationAnswer);
-}
-
-if (candidatesList.length === 0) {
-  return {
-    type: "stop",
-    message: stopMessage(),
-    actions: ["expand_radius", "watch_notify", "switch_resolution_mode"],
-    state: nextState,
-  };
-}
-  if (locationChanged) {
-    candidates = sortCandidates(candidates);
+  let candidatesList = collectCandidates(input.candidates);
+  if (nextState.mode !== "national") {
+    candidatesList = filterLocalCandidates(candidatesList);
   }
 
-  const sorted = sortCandidates(candidates);
+  if (state.clarificationAsked && input.clarificationAnswer) {
+    candidatesList = narrowByClarification(
+      candidatesList,
+      input.clarificationAnswer
+    );
+  }
+
+  if (candidatesList.length === 0) {
+    return {
+      type: "stop",
+      message: stopMessage(),
+      actions: ["expand_radius", "watch_notify", "switch_resolution_mode"],
+      state: nextState,
+    };
+  }
+
+  if (locationChanged) {
+    candidatesList = sortCandidates(candidatesList);
+  }
+
+  const sorted = sortCandidates(candidatesList);
   const topScore = computeScore(sorted[0]);
   const { primary, tied } = resolveTie(sorted);
   const tieOptions = tied.slice(0, 3);
 
   if (state.clarificationAsked && input.clarificationAnswer) {
-    if (primary && topScore >= 0.8 && hasConfirmedScope(primary, resolvedLocation)) {
+    if (
+      primary &&
+      topScore >= 0.8 &&
+      hasConfirmedScope(primary, resolvedLocation)
+    ) {
       return {
         type: "answer",
         message: buildAnswerMessage(primary, resolvedLocation),
@@ -316,25 +312,7 @@ if (candidatesList.length === 0) {
   }
 
   if (topScore >= 0.8) {
-    if (!primary) {
-      return {
-        type: "stop",
-        message: stopMessage(),
-        actions: ["expand_radius", "watch_notify", "switch_resolution_mode"],
-        state: nextState,
-      };
-    }
-
-    if (!hasConfirmedScope(primary, resolvedLocation)) {
-      return {
-        type: "stop",
-        message: stopMessage(),
-        actions: ["expand_radius", "watch_notify", "switch_resolution_mode"],
-        state: nextState,
-      };
-    }
-
-    if (tied.length > 1 && !primary) {
+    if (!primary || !hasConfirmedScope(primary, resolvedLocation)) {
       return {
         type: "stop",
         message: stopMessage(),
@@ -352,7 +330,7 @@ if (candidatesList.length === 0) {
     };
   }
 
-  if (topScore >= 0.6 && topScore < 0.8) {
+  if (topScore >= 0.6) {
     if (state.clarificationAsked) {
       return {
         type: "stop",
