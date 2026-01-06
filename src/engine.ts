@@ -121,8 +121,10 @@ function resolveLocation(
     };
   }
 
-  return { state };
-}
+  return {
+  resolvedLocation: state.lastLocation,
+  state,
+};
 
 function collectCandidates(
   candidates?: EngineInput["candidates"]
