@@ -124,11 +124,15 @@ function resolveLocation(
   return { state };
 }
 
-function collectCandidates(input: EngineInput): Candidate[] {
-  const provider = input.candidates?.provider ?? [];
-  const feed = input.candidates?.feed ?? [];
-  const publicListings = input.candidates?.public ?? [];
+function collectCandidates(
+  candidates?: EngineInput["candidates"]
+): Candidate[] {
+  const provider = candidates?.provider ?? [];
+  const feed = candidates?.feed ?? [];
+  const publicListings = candidates?.public ?? [];
   return [...provider, ...feed, ...publicListings];
+}
+
 }
 
 function filterLocalCandidates(candidates: Candidate[]): Candidate[] {
