@@ -122,9 +122,10 @@ function resolveLocation(
   }
 
   return {
-  resolvedLocation: state.lastLocation,
-  state,
-};
+    resolvedLocation: state.lastLocation,
+    state,
+  };
+}
 
 function collectCandidates(
   candidates?: EngineInput["candidates"]
@@ -133,8 +134,6 @@ function collectCandidates(
   const feed = candidates?.feed ?? [];
   const publicListings = candidates?.public ?? [];
   return [...provider, ...feed, ...publicListings];
-}
-
 }
 
 function filterLocalCandidates(candidates: Candidate[]): Candidate[] {
@@ -271,24 +270,23 @@ export function runEngine(input: EngineInput): EngineResponse {
     mode: input.allowNational ? "national" : locationResult.state.mode ?? "local",
   };
 
-  let candidates = collectCandidates(input);
-  if (nextState.mode !== "national") {
-    candidates = filterLocalCandidates(candidates);
-  }
+let candidatesList = collectCandidates(input.candidates);
+if (nextState.mode !== "national") {
+  candidatesList = filterLocalCandidates(candidatesList);
+}
 
   if (state.clarificationAsked && input.clarificationAnswer) {
-    candidates = narrowByClarification(candidates, input.clarificationAnswer);
-  }
+  candidatesList = narrowByClarification(candidatesList, input.clarificationAnswer);
+}
 
-  if (candidates.length === 0) {
-    return {
-      type: "stop",
-      message: stopMessage(),
-      actions: ["expand_radius", "watch_notify", "switch_resolution_mode"],
-      state: nextState,
-    };
-  }
-
+if (candidatesList.length === 0) {
+  return {
+    type: "stop",
+    message: stopMessage(),
+    actions: ["expand_radius", "watch_notify", "switch_resolution_mode"],
+    state: nextState,
+  };
+}
   if (locationChanged) {
     candidates = sortCandidates(candidates);
   }
