@@ -1,0 +1,25 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model AnswerLog {
+  id                 String   @id @default(uuid())
+  created_at         DateTime @default(now())
+  question           String
+  normalized_question String
+  context_json       Json
+  intent             String
+  entities_json      Json
+  answer             String
+  confidence         String
+  reason             String
+  next_action        String
+  trace_json         Json
+  latency_ms         Int
+  provider_model     String
+}
