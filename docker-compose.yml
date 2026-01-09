@@ -1,0 +1,17 @@
+version: "3.9"
+services:
+  ae-backend:
+    build: .
+    ports:
+      - "3000:3000"
+    environment:
+      - PORT=3000
+      - NODE_ENV=development
+      - DATABASE_URL=sqlite:./dev.db
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - OPENAI_MODEL=${OPENAI_MODEL:-gpt-4.1-mini}
+      - LLM_TEMPERATURE=0
+      - LLM_TIMEOUT_MS=8000
+      - CACHE_TTL_SECONDS=300
+    volumes:
+      - ./dev.db:/app/dev.db
