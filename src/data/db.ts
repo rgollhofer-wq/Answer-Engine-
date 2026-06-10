@@ -6,7 +6,7 @@ let prisma: PrismaClient | null = null;
 export function getPrismaClient(): PrismaClient {
   if (!prisma) {
     prisma = new PrismaClient();
-    prisma.$connect().catch((error) => {
+    prisma.$connect().catch((error: unknown) => {
       logger.error({ error }, "Failed to connect to database");
     });
   }

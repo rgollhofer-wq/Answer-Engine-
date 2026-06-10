@@ -3,7 +3,7 @@
 Backend-only Answer Engine implementation with Fastify, TypeScript, Prisma, and OpenAI.
 
 ## Features
-- `/health` and `/answer` endpoints
+- `/health`, `/answer`, and `/radar` endpoints
 - Intent + entity extraction via LLM
 - Confidence gating rules
 - Structured trace output (no chain-of-thought)
@@ -23,11 +23,13 @@ Backend-only Answer Engine implementation with Fastify, TypeScript, Prisma, and 
     ├── server.ts
     ├── routes
     │   ├── answer.ts
-    │   └── health.ts
+    │   ├── health.ts
+    │   └── radar.ts
     ├── core
     │   ├── engine.ts
     │   ├── intent.ts
     │   ├── normalize.ts
+    │   ├── radar.ts
     │   ├── rules.ts
     │   ├── trace.ts
     │   └── validators.ts
@@ -65,6 +67,39 @@ curl -X POST http://localhost:3000/answer \
   -d '{"question":"Is a front brake pad available locally and eligible for a 2021 Hyundai Tucson?","context":{"location":{"postal_code":"80112","radius_miles":25}}}'
 ```
 
+
+### LocalRadar sales diagnostic
+
+`POST /radar` runs a LocalRadar diagnostic for a local-business website. The endpoint accepts a website URL, scouts the public page automatically, infers the likely business type, asks the configured LLM provider for an AI Visibility Scorecard, and returns a presentation-ready report with prioritized opportunities and next steps.
+
+Example request:
+
+```bash
+curl -X POST http://localhost:3000/radar \
+  -H "Content-Type: application/json" \
+  -d '{"website_url":"https://example.com"}'
+```
+
+Request body:
+
+```json
+{
+  "website_url": "https://example.com"
+}
+```
+
+Response fields include:
+
+- `business_type`: inferred business category for sales positioning.
+- `executive_summary`: concise presentation-ready diagnostic summary.
+- `ai_visibility_scorecard`: overall score, letter grade, and category scores for local relevance, service clarity, AI answer readiness, conversion path, and trust signals.
+- `opportunities`: prioritized sales opportunities with rationale and recommended actions.
+- `recommended_next_steps`: practical follow-up actions for the business.
+- `presentation_notes`: talking points for a sales conversation.
+- `scout`: evidence gathered from the website, including title, meta description, headings, internal links, extracted visibility signals, and the heuristic business-type guess.
+
+If `API_KEY` is set, the same `Authorization: Bearer <API_KEY>` header used by `/answer` is required for `/radar`.
+
 ## Environment Variables
 See `.env.example` for the full list.
 
@@ -99,5 +134,5 @@ docker run -p 3000:3000 --env-file .env ae-backend
 5. Use a Postgres instance and update `DATABASE_URL` accordingly.
 
 ## Notes
-- If `API_KEY` is set, `Authorization: Bearer <API_KEY>` is required on `/answer`.
+- If `API_KEY` is set, `Authorization: Bearer <API_KEY>` is required on `/answer` and `/radar`.
 - CORS defaults to `*` in development, or use `CORS_ORIGINS` for a comma-separated allowlist.

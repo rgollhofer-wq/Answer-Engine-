@@ -111,7 +111,7 @@ export function evaluateConfidence(params: {
       confidence = "unknown";
       rulesApplied.push("R12_GUARANTEE_NEEDS_VIN");
     } else if (detectExactFitment(params.question)) {
-      confidence = confidence === "unknown" ? "unknown" : "medium";
+      confidence = "medium";
       rulesApplied.push("R12_EXACT_FITMENT_NEEDS_VIN");
     }
   }

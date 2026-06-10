@@ -53,16 +53,16 @@ export class InMemoryAnswerLogRepository implements AnswerLogRepository {
 }
 
 export interface CacheProvider {
-  get(key: string): Promise<AnswerResponse | null>;
-  set(key: string, value: AnswerResponse, ttlSeconds: number): Promise<void>;
+  get<T = AnswerResponse>(key: string): Promise<T | null>;
+  set<T = AnswerResponse>(key: string, value: T, ttlSeconds: number): Promise<void>;
 }
 
 export class NullCacheProvider implements CacheProvider {
-  async get(): Promise<AnswerResponse | null> {
+  async get<T = AnswerResponse>(): Promise<T | null> {
     return null;
   }
 
-  async set(): Promise<void> {
+  async set<T = AnswerResponse>(): Promise<void> {
     return undefined;
   }
 }
