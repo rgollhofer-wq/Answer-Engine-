@@ -1,17 +1,16 @@
-import Redis from "ioredis";
-import { AnswerResponse } from "../core/trace.js";
+import { Redis } from "ioredis";
 import { CacheProvider, NullCacheProvider } from "./repo.js";
 
 export class RedisCacheProvider implements CacheProvider {
   constructor(private readonly client: Redis) {}
 
-  async get(key: string): Promise<AnswerResponse | null> {
+  async get<T>(key: string): Promise<T | null> {
     const value = await this.client.get(key);
     if (!value) return null;
-    return JSON.parse(value) as AnswerResponse;
+    return JSON.parse(value) as T;
   }
 
-  async set(key: string, value: AnswerResponse, ttlSeconds: number): Promise<void> {
+  async set<T>(key: string, value: T, ttlSeconds: number): Promise<void> {
     await this.client.set(key, JSON.stringify(value), "EX", ttlSeconds);
   }
 }

@@ -3,6 +3,7 @@ import cors from "@fastify/cors";
 import rateLimit from "@fastify/rate-limit";
 import { registerHealthRoute } from "./routes/health.js";
 import { registerAnswerRoute } from "./routes/answer.js";
+import { registerRadarRoute } from "./routes/radar.js";
 import { loadEnv, parseCorsOrigins } from "./config/env.js";
 import { logger } from "./utils/logger.js";
 import { OpenAiProvider } from "./providers/openai.js";
@@ -21,7 +22,7 @@ export interface ServerDependencies {
 }
 
 export function buildServer(deps?: Partial<ServerDependencies>) {
-  const app = Fastify({ logger });
+  const app = Fastify({ logger: { level: process.env.NODE_ENV === "production" ? "info" : "debug" } });
 
   const origins = parseCorsOrigins(env.CORS_ORIGINS);
   app.register(cors, {
@@ -60,17 +61,28 @@ export function buildServer(deps?: Partial<ServerDependencies>) {
     apiKey: env.API_KEY,
   });
 
+  registerRadarRoute(app, {
+    provider,
+    cache,
+    cacheTtlSeconds: env.CACHE_TTL_SECONDS,
+    temperature: env.LLM_TEMPERATURE,
+    timeoutMs: env.LLM_TIMEOUT_MS,
+    apiKey: env.API_KEY,
+  });
+
   return app;
 }
 
-const app = buildServer();
+if (process.env.NODE_ENV !== "test") {
+  const app = buildServer();
 
-app
-  .listen({ port: Number(env.PORT), host: "0.0.0.0" })
-  .then(() => {
-    logger.info("Answer Engine listening");
-  })
-  .catch((error) => {
-    logger.error({ error }, "Failed to start server");
-    process.exit(1);
-  });
+  app
+    .listen({ port: Number(env.PORT), host: "0.0.0.0" })
+    .then(() => {
+      logger.info("Answer Engine listening");
+    })
+    .catch((error) => {
+      logger.error({ error }, "Failed to start server");
+      process.exit(1);
+    });
+}
