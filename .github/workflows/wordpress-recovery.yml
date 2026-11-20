@@ -1,0 +1,28 @@
+name: WordPress recovery contracts
+on:
+  pull_request:
+    paths:
+      - 'wordpress/**'
+      - 'tests/wordpress/**'
+      - '.github/workflows/wordpress-recovery.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  contracts:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - name: Runtime versions
+        run: |
+          php --version
+          node --version
+      - name: Syntax and isolated WordPress contracts
+        run: |
+          set -eu
+          for file in wordpress/bbl-answer-engine-mvp/*.php; do php -l "$file"; done
+          php tests/wordpress/engine.php
+          php tests/wordpress/plugin.php
+          php tests/wordpress/route.php
+          node --check wordpress/bbl-answer-engine-mvp/sammy.js
+          node --test tests/wordpress/interface.checks.cjs
