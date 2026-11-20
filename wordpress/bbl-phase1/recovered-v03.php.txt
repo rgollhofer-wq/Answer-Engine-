@@ -1,0 +1,627 @@
+<?php
+/**
+ * Plugin Name: BBL Answer Engine MVP
+ * Description: Answer Engine for Backed by Local with ZIP support, radius clusters, and conversational local voice.
+ * Version: 0.3
+ * Author: Ric + Sam
+ */
+
+if ( ! defined( 'ABSPATH' ) ) {
+    exit;
+}
+
+if ( ! class_exists( 'BBL_Answer_Engine_MVP' ) ) :
+
+class BBL_Answer_Engine_MVP {
+
+    private $openai_api_key;
+
+    public function __construct() {
+        if ( defined( 'BBL_OPENAI_API_KEY' ) ) {
+            $this->openai_api_key = BBL_OPENAI_API_KEY;
+        } else {
+            $this->openai_api_key = getenv( 'OPENAI_API_KEY' );
+        }
+
+        add_action( 'rest_api_init', array( $this, 'register_routes' ) );
+    }
+
+    public function register_routes() {
+        register_rest_route(
+            'bbl/v1',
+            '/answer',
+            array(
+                'methods'             => 'POST',
+                'callback'            => array( $this, 'handle_answer_request' ),
+                'permission_callback' => '__return_true',
+            )
+        );
+    }
+
+    public function handle_answer_request( WP_REST_Request $request ) {
+        $params   = $request->get_json_params();
+        $question = isset( $params['question'] ) ? sanitize_text_field( $params['question'] ) : '';
+        $city     = isset( $params['city'] ) ? sanitize_text_field( $params['city'] ) : '';
+
+        if ( empty( $question ) ) {
+            return new WP_REST_Response(
+                array( 'error' => 'Missing question' ),
+                400
+            );
+        }
+
+        // Try ZIP first
+        $zip = $this->extract_zip_code( $question );
+        if ( $zip ) {
+            $zip_city = $this->map_zip_to_city_slug( $zip );
+            if ( $zip_city ) {
+                $city = $zip_city;
+            }
+        }
+
+        // Default anchor if none resolved
+        if ( empty( $city ) ) {
+            $city = 'lynnwood-wa';
+        }
+
+        $category_slug = $this->infer_category_from_question( $question );
+        $city_cluster  = $this->get_city_cluster_for_radius( $city );
+        $city_name     = $this->map_city_slug_to_name( $city );
+        $businesses    = $this->get_matching_businesses( $city_cluster, $category_slug );
+
+        $context = array(
+            'anchor_city_slug' => $city,
+            'anchor_city_name' => $city_name,
+            'cluster'          => $city_cluster,
+            'category_slug'    => $category_slug,
+            'question'         => $question,
+            'businesses'       => $businesses,
+            'category_url'     => $this->guess_category_url( $city, $category_slug ),
+        );
+
+        $answer_html = $this->generate_answer_with_ai( $context );
+
+        if ( is_wp_error( $answer_html ) ) {
+            return new WP_REST_Response(
+                array( 'error' => $answer_html->get_error_message() ),
+                500
+            );
+        }
+
+        return new WP_REST_Response(
+            array(
+                'answer_html' => $answer_html,
+                'raw_results' => $businesses,
+            ),
+            200
+        );
+    }
+
+    /* -------- ZIP + radius helpers -------- */
+
+    private function extract_zip_code( $question ) {
+        if ( preg_match( '/\b\d{5}\b/', $question, $matches ) ) {
+            return $matches[0];
+        }
+        return null;
+    }
+
+    private function map_zip_to_city_slug( $zip ) {
+        $map = array(
+
+            /* ---------- COLORADO ---------- */
+            '80134' => 'parker-co',
+            '80138' => 'parker-co',
+            '80015' => 'centennial-co',
+            '80016' => 'centennial-co',
+            '80013' => 'aurora-co',
+            '80014' => 'aurora-co',
+            '80012' => 'aurora-co',
+            '80108' => 'castle-rock-co',
+            '80109' => 'castle-rock-co',
+            '80020' => 'broomfield-co',
+            '80301' => 'boulder-co',
+            '80521' => 'fort-collins-co',
+            '80202' => 'denver-co',
+            '80249' => 'denver-co',
+            '80002' => 'arvada-co',
+            '80126' => 'highlands-ranch-co',
+            '80124' => 'lone-tree-co',
+
+            /* ---------- WASHINGTON ---------- */
+            '98275' => 'mukilteo-wa',
+            '98208' => 'everett-wa',
+            '98201' => 'everett-wa',
+            '98036' => 'lynnwood-wa',
+            '98037' => 'lynnwood-wa',
+            '98087' => 'lynnwood-wa',
+            '98012' => 'mill-creek-wa',
+            '98021' => 'bothell-wa',
+            '98011' => 'bothell-wa',
+            '98270' => 'marysville-wa',
+            '98155' => 'lake-forest-park-wa',
+            '98103' => 'seattle-wa',
+            '98107' => 'seattle-wa',
+            '98119' => 'seattle-wa',
+            '98102' => 'seattle-wa',
+            '98122' => 'seattle-wa',
+            '98126' => 'seattle-wa',
+            '98146' => 'burien-wa',
+            '98032' => 'kent-wa',
+            '98030' => 'kent-wa',
+            '98004' => 'bellevue-wa',
+            '98402' => 'tacoma-wa',
+
+            /* ---------- OREGON ---------- */
+            '97201' => 'portland-or',
+            '97209' => 'portland-or',
+            '97206' => 'portland-or',
+            '97005' => 'beaverton-or',
+            '97223' => 'tigard-or',
+            '97034' => 'lake-oswego-or',
+            '97124' => 'hillsboro-or',
+            '97030' => 'gresham-or',
+
+            /* ---------- UTAH ---------- */
+            '84101' => 'salt-lake-city-ut',
+            '84111' => 'salt-lake-city-ut',
+            '84047' => 'sandy-ut',
+            '84095' => 'south-jordan-ut',
+            '84084' => 'west-jordan-ut',
+            '84119' => 'west-valley-city-ut',
+            '84401' => 'ogden-ut',
+            '84601' => 'provo-ut',
+            '84057' => 'orem-ut',
+            '84020' => 'draper-ut',
+            '84043' => 'lehi-ut',
+        );
+
+        return isset( $map[ $zip ] ) ? $map[ $zip ] : null;
+    }
+
+    private function get_city_cluster_for_radius( $city_slug, $radius_miles = 25 ) {
+        $map = array(
+
+            /* ---------- COLORADO ---------- */
+            'parker-co' => array(
+                'parker-co',
+                'centennial-co',
+                'aurora-co',
+                'castle-rock-co',
+                'lone-tree-co',
+                'highlands-ranch-co',
+            ),
+            'centennial-co' => array(
+                'centennial-co',
+                'parker-co',
+                'aurora-co',
+                'greenwood-village-co',
+                'littleton-co',
+                'highlands-ranch-co',
+                'lone-tree-co',
+            ),
+            'aurora-co' => array(
+                'aurora-co',
+                'centennial-co',
+                'parker-co',
+                'denver-co',
+            ),
+            'castle-rock-co' => array(
+                'castle-rock-co',
+                'parker-co',
+                'lone-tree-co',
+                'highlands-ranch-co',
+            ),
+            'denver-co' => array(
+                'denver-co',
+                'aurora-co',
+                'lakewood-co',
+                'arvada-co',
+                'thornton-co',
+                'westminster-co',
+            ),
+            'boulder-co' => array(
+                'boulder-co',
+                'broomfield-co',
+                'louisville-co',
+                'lafayette-co',
+            ),
+            'fort-collins-co' => array(
+                'fort-collins-co',
+                'loveland-co',
+                'windsor-co',
+            ),
+            'arvada-co' => array(
+                'arvada-co',
+                'westminster-co',
+                'wheat-ridge-co',
+                'denver-co',
+            ),
+            'highlands-ranch-co' => array(
+                'highlands-ranch-co',
+                'littleton-co',
+                'lone-tree-co',
+                'centennial-co',
+            ),
+            'lone-tree-co' => array(
+                'lone-tree-co',
+                'highlands-ranch-co',
+                'parker-co',
+                'castle-rock-co',
+                'centennial-co',
+            ),
+
+            /* ---------- WASHINGTON ---------- */
+            'lynnwood-wa' => array(
+                'lynnwood-wa',
+                'mill-creek-wa',
+                'bothell-wa',
+                'everett-wa',
+                'shoreline-wa',
+                'edmonds-wa',
+            ),
+            'mill-creek-wa' => array(
+                'mill-creek-wa',
+                'lynnwood-wa',
+                'bothell-wa',
+                'mukilteo-wa',
+            ),
+            'bothell-wa' => array(
+                'bothell-wa',
+                'mill-creek-wa',
+                'lynnwood-wa',
+                'kirkland-wa',
+                'woodinville-wa',
+            ),
+            'everett-wa' => array(
+                'everett-wa',
+                'mukilteo-wa',
+                'marysville-wa',
+                'lynnwood-wa',
+            ),
+            'shoreline-wa' => array(
+                'shoreline-wa',
+                'lake-forest-park-wa',
+                'seattle-wa',
+                'lynnwood-wa',
+            ),
+            'edmonds-wa' => array(
+                'edmonds-wa',
+                'lynnwood-wa',
+                'shoreline-wa',
+            ),
+            'seattle-wa' => array(
+                'seattle-wa',
+                'shoreline-wa',
+                'burien-wa',
+                'sea-tac-wa',
+                'renton-wa',
+                'bellevue-wa',
+            ),
+            'burien-wa' => array(
+                'burien-wa',
+                'sea-tac-wa',
+                'seattle-wa',
+                'des-moines-wa',
+            ),
+            'kent-wa' => array(
+                'kent-wa',
+                'renton-wa',
+                'auburn-wa',
+                'federal-way-wa',
+            ),
+            'bellevue-wa' => array(
+                'bellevue-wa',
+                'kirkland-wa',
+                'redmond-wa',
+                'seattle-wa',
+                'issaquah-wa',
+            ),
+            'tacoma-wa' => array(
+                'tacoma-wa',
+                'university-place-wa',
+                'lakewood-wa',
+                'puyallup-wa',
+            ),
+
+            /* ---------- OREGON ---------- */
+            'portland-or' => array(
+                'portland-or',
+                'gresham-or',
+                'beaverton-or',
+                'tigard-or',
+                'lake-oswego-or',
+                'hillsboro-or',
+                'vancouver-wa',
+            ),
+            'gresham-or' => array(
+                'gresham-or',
+                'portland-or',
+                'troutdale-or',
+                'fairview-or',
+            ),
+            'beaverton-or' => array(
+                'beaverton-or',
+                'portland-or',
+                'tigard-or',
+                'hillsboro-or',
+            ),
+            'tigard-or' => array(
+                'tigard-or',
+                'beaverton-or',
+                'lake-oswego-or',
+                'portland-or',
+            ),
+            'lake-oswego-or' => array(
+                'lake-oswego-or',
+                'portland-or',
+                'tigard-or',
+                'west-linn-or',
+            ),
+            'hillsboro-or' => array(
+                'hillsboro-or',
+                'beaverton-or',
+                'forest-grove-or',
+            ),
+
+            /* ---------- UTAH ---------- */
+            'salt-lake-city-ut' => array(
+                'salt-lake-city-ut',
+                'west-valley-city-ut',
+                'sandy-ut',
+                'west-jordan-ut',
+                'murray-ut',
+            ),
+            'sandy-ut' => array(
+                'sandy-ut',
+                'draper-ut',
+                'south-jordan-ut',
+                'salt-lake-city-ut',
+            ),
+            'west-jordan-ut' => array(
+                'west-jordan-ut',
+                'west-valley-city-ut',
+                'south-jordan-ut',
+                'taylorsville-ut',
+            ),
+            'west-valley-city-ut' => array(
+                'west-valley-city-ut',
+                'salt-lake-city-ut',
+                'west-jordan-ut',
+            ),
+            'ogden-ut' => array(
+                'ogden-ut',
+                'north-ogden-ut',
+                'south-ogden-ut',
+            ),
+            'provo-ut' => array(
+                'provo-ut',
+                'orem-ut',
+                'springville-ut',
+            ),
+            'orem-ut' => array(
+                'orem-ut',
+                'provo-ut',
+                'pleasant-grove-ut',
+            ),
+            'draper-ut' => array(
+                'draper-ut',
+                'sandy-ut',
+                'lehi-ut',
+            ),
+            'lehi-ut' => array(
+                'lehi-ut',
+                'american-fork-ut',
+                'draper-ut',
+            ),
+        );
+
+        return isset( $map[ $city_slug ] ) ? $map[ $city_slug ] : array( $city_slug );
+    }
+
+    private function infer_category_from_question( $question ) {
+        $q = strtolower( $question );
+
+        $map = array(
+            'restaurants' => array( 'food', 'restaurant', 'eat', 'dinner', 'lunch', 'brunch', 'pizza', 'burger', 'taco', 'tacos', 'sushi', 'date night' ),
+            'nightlife'   => array( 'bar', 'nightlife', 'cocktail', 'beer', 'pub', 'late night' ),
+            'wellness'    => array( 'yoga', 'gym', 'workout', 'fitness', 'spa', 'massage', 'wellness', 'pilates' ),
+            'home-services' => array( 'plumber', 'electrician', 'roof', 'roofer', 'hvac', 'contractor', 'remodel', 'repair' ),
+            'local'       => array( 'coffee', 'shop', 'boutique', 'local store', 'gift', 'bookstore' ),
+        );
+
+        foreach ( $map as $slug => $keywords ) {
+            foreach ( $keywords as $kw ) {
+                if ( strpos( $q, $kw ) !== false ) {
+                    return $slug;
+                }
+            }
+        }
+
+        return 'local';
+    }
+
+    private function map_city_slug_to_name( $city_slug ) {
+        $map = array(
+            /* CO */
+            'parker-co'            => 'Parker, Colorado',
+            'centennial-co'        => 'Centennial, Colorado',
+            'aurora-co'            => 'Aurora, Colorado',
+            'castle-rock-co'       => 'Castle Rock, Colorado',
+            'denver-co'            => 'Denver, Colorado',
+            'boulder-co'           => 'Boulder, Colorado',
+            'fort-collins-co'      => 'Fort Collins, Colorado',
+            'arvada-co'            => 'Arvada, Colorado',
+            'highlands-ranch-co'   => 'Highlands Ranch, Colorado',
+            'lone-tree-co'         => 'Lone Tree, Colorado',
+            'broomfield-co'        => 'Broomfield, Colorado',
+            /* WA */
+            'mukilteo-wa'          => 'Mukilteo, Washington',
+            'everett-wa'           => 'Everett, Washington',
+            'lynnwood-wa'          => 'Lynnwood, Washington',
+            'mill-creek-wa'        => 'Mill Creek, Washington',
+            'bothell-wa'           => 'Bothell, Washington',
+            'marysville-wa'        => 'Marysville, Washington',
+            'lake-forest-park-wa'  => 'Lake Forest Park, Washington',
+            'seattle-wa'           => 'Seattle, Washington',
+            'burien-wa'            => 'Burien, Washington',
+            'kent-wa'              => 'Kent, Washington',
+            'bellevue-wa'          => 'Bellevue, Washington',
+            'tacoma-wa'            => 'Tacoma, Washington',
+            'shoreline-wa'         => 'Shoreline, Washington',
+            'edmonds-wa'           => 'Edmonds, Washington',
+            /* OR */
+            'portland-or'          => 'Portland, Oregon',
+            'gresham-or'           => 'Gresham, Oregon',
+            'beaverton-or'         => 'Beaverton, Oregon',
+            'tigard-or'            => 'Tigard, Oregon',
+            'lake-oswego-or'       => 'Lake Oswego, Oregon',
+            'hillsboro-or'         => 'Hillsboro, Oregon',
+            /* UT */
+            'salt-lake-city-ut'    => 'Salt Lake City, Utah',
+            'sandy-ut'             => 'Sandy, Utah',
+            'west-jordan-ut'       => 'West Jordan, Utah',
+            'west-valley-city-ut'  => 'West Valley City, Utah',
+            'ogden-ut'             => 'Ogden, Utah',
+            'provo-ut'             => 'Provo, Utah',
+            'orem-ut'              => 'Orem, Utah',
+            'draper-ut'            => 'Draper, Utah',
+            'lehi-ut'              => 'Lehi, Utah',
+        );
+
+        return isset( $map[ $city_slug ] ) ? $map[ $city_slug ] : $city_slug;
+    }
+
+    private function get_matching_businesses( $city_slugs, $category_slug ) {
+        if ( ! is_array( $city_slugs ) ) {
+            $city_slugs = array( $city_slugs );
+        }
+
+        $args = array(
+            'post_type'      => 'business',
+            'posts_per_page' => 5,
+            'post_status'    => 'publish',
+            'tax_query'      => array(
+                'relation' => 'AND',
+                array(
+                    'taxonomy' => 'bbl_city',
+                    'field'    => 'slug',
+                    'terms'    => $city_slugs,
+                ),
+                array(
+                    'taxonomy' => 'bbl_category',
+                    'field'    => 'slug',
+                    'terms'    => $category_slug,
+                ),
+            ),
+        );
+
+        $query   = new WP_Query( $args );
+        $results = array();
+
+        if ( $query->have_posts() ) {
+            foreach ( $query->posts as $post ) {
+                $results[] = array(
+                    'title'   => get_the_title( $post ),
+                    'url'     => get_permalink( $post ),
+                    'phone'   => get_post_meta( $post->ID, 'bbl_phone', true ),
+                    'address' => get_post_meta( $post->ID, 'bbl_address', true ),
+                );
+            }
+        }
+
+        wp_reset_postdata();
+        return $results;
+    }
+
+    private function guess_category_url( $anchor_city_slug, $category_slug ) {
+        return home_url( '/' . $anchor_city_slug . '/' . $category_slug . '/' );
+    }
+
+    private function generate_answer_with_ai( $context ) {
+        if ( ! $this->openai_api_key ) {
+            return new WP_Error( 'missing_api_key', 'OpenAI API key not configured.' );
+        }
+
+        $endpoint = 'https://api.openai.com/v1/chat/completions';
+
+        $business_list_text = '';
+        foreach ( $context['businesses'] as $b ) {
+            $business_list_text .= sprintf(
+                "- %s (%s) — %s\n",
+                $b['title'],
+                $b['phone'],
+                $b['url']
+            );
+        }
+
+        $cluster_str = implode( ', ', $context['cluster'] );
+
+        $system_prompt = sprintf(
+            "You are a friendly local guide for %s and the nearby area. ".
+            "You speak like a real person who lives there: relaxed, clear, and helpful. ".
+            "You NEVER sound like a robot or an AI assistant. ".
+            "You NEVER invent businesses that are not in the list provided. ".
+            "You keep answers short (2–4 sentences), specific, and easy to skim. ".
+            "You usually recommend the anchor city first, then nearby cities within about 10–20 minutes if it makes sense. ".
+            "If options are limited, you’re honest about it but still encouraging, and you invite the visitor to explore the category page link.",
+            $context['anchor_city_name']
+        );
+
+        $user_prompt = "Visitor question: {$context['question']}\n\n".
+            "Anchor city: {$context['anchor_city_name']} (slug: {$context['anchor_city_slug']})\n".
+            "Cluster city slugs (approx 10–25 minute radius): {$cluster_str}\n".
+            "Inferred category: {$context['category_slug']}\n".
+            "Category page URL: {$context['category_url']}\n\n".
+            "Here are businesses you can recommend:\n".
+            $business_list_text.
+            "\n\nWrite the answer as if you’re a local talking to a neighbor. ".
+            "Use natural, conversational language. ".
+            "Mention 2–3 specific businesses by name with each name hyperlinked to its URL. ".
+            "Start with spots in the anchor city when possible. ".
+            "You can say things like 'If you’re in the mood for…' or 'If you don’t mind a quick drive…'. ".
+            "End with one short line like: 'You can see more local options here' linking to the category page.\n";
+
+        $body = array(
+            'model'    => 'gpt-4.1-mini',
+            'messages' => array(
+                array( 'role' => 'system', 'content' => $system_prompt ),
+                array( 'role' => 'user',   'content' => $user_prompt ),
+            ),
+            'temperature' => 0.55,
+        );
+
+        $response = wp_remote_post(
+            $endpoint,
+            array(
+                'headers' => array(
+                    'Content-Type'  => 'application/json',
+                    'Authorization' => 'Bearer ' . $this->openai_api_key,
+                ),
+                'body'    => wp_json_encode( $body ),
+                'timeout' => 30,
+            )
+        );
+
+        if ( is_wp_error( $response ) ) {
+            return $response;
+        }
+
+        $code = wp_remote_retrieve_response_code( $response );
+        if ( $code < 200 || $code >= 300 ) {
+            return new WP_Error( 'openai_http_error', 'OpenAI API error: HTTP ' . $code );
+        }
+
+        $data = json_decode( wp_remote_retrieve_body( $response ), true );
+
+        if ( ! isset( $data['choices'][0]['message']['content'] ) ) {
+            return new WP_Error( 'openai_bad_response', 'Unexpected OpenAI response.' );
+        }
+
+        return trim( $data['choices'][0]['message']['content'] );
+    }
+}
+
+new BBL_Answer_Engine_MVP();
+
+endif;

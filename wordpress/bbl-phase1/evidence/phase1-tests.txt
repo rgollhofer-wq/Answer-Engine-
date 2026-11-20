@@ -1,0 +1,49 @@
+PASS 1: Natural-language Denver water heater intent
+PASS 2: Follow-up retains service, location and urgency
+PASS 3: Location correction
+PASS 4: Urgency correction
+PASS 5: Reset removes previous intent
+PASS 6: No silent Lynnwood default
+PASS 7: Unknown ZIP does not fabricate city
+PASS 8: Recovered explicit ZIP map
+PASS 9: Missing city asks follow-up
+PASS 10: Unsupported service asks clarification
+PASS 11: Empty evidence produces explicit no-match
+PASS 12: Today request never becomes availability claim
+PASS 13: Current scoped evidence permits verified status (synthetic fixture only)
+PASS 14: Missing evidence is Possible, never Verified
+PASS 15: Expired evidence rejected
+PASS 16: Generic plumbing evidence cannot assert water-heater capability
+PASS 17: Evidence must cover requested city
+PASS 18: Draft businesses excluded
+PASS 19: Nearby city is not assumed coverage
+PASS 20: Sponsorship cannot change organic order
+PASS 21: Exact plumbing route
+PASS 22: Plain-permalink fallback route
+PASS 23: Preserve route /
+PASS 24: Preserve route /backed-by-local/
+PASS 25: Preserve route /backed-by-local/?page_id=907
+PASS 26: Preserve route /category/home-services/plumbing/
+PASS 27: Preserve route /backed-by-local/cities/denver/
+PASS 28: Existing legacy registrations untouched
+PASS 29: Production home URL blocked
+PASS 30: Anonymous or unprivileged REST access blocked
+PASS 31: Malformed question rejected
+PASS 32: Server-owned conversation state across requests
+PASS 33: Consent required before storage
+PASS 34: Client cannot forge matched provider
+PASS 35: Stale answer cannot be submitted
+PASS 36: Invalid contact rejected
+PASS 37: Storage failure prevents email and false receipt
+PASS 38: Failed mail retains persisted lead and truthful status
+PASS 39: Lead contains contact, request, location, provider, consent, source, timestamp
+PASS 40: Retry is idempotent and does not resend notification
+PASS 41: wp_mail success is never delivery verification
+PASS 42: Mailer exception preserves durable record without leaking diagnostic secrets
+PASS 43: Status write failure retains honest pending state
+PASS 44: Scoped route entry installs beneath staging only
+PASS 45: Route installation is idempotent
+PASS 46: Existing route file is never overwritten
+PASS 47: Route installer refuses non-staging root
+
+47 tests passed. WordPress functions are doubles; live staging smoke evidence is separate.

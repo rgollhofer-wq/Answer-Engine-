@@ -1,0 +1,23 @@
+{
+  "testedAt": "2026-11-20T20:01:37.957Z",
+  "demo": "https://backedbylocal.com/backed-by-local/category/home-services/plumbing/",
+  "conversation": "Sammy: Hi — what plumbing help do you need, and in which city?\nYou: My water heater is leaking in Denver. Can someone help today?\nSammy: I do not have a verified plumbing match for your request in Denver Co. I cannot confirm someone can help today. You can leave a request for BBL to review; this is not a booking.\nIs the water heater gas, electric, or tankless, if you know?\nYou: It is electric.\nSammy: I do not have a verified plumbing match for your request in Denver Co. I cannot confirm someone can help today. You can leave a request for BBL to review; this is not a booking.",
+  "receipt": "Your staging test request is saved. Email delivery is unverified. This is not a booking.\nLead ID: a542a06da9294740cd90d2bb\nDelivery status: failed (unverified)",
+  "leadId": "a542a06da9294740cd90d2bb",
+  "leadReadBackOnSeparateAdminPage": true,
+  "homeContentUnchanged": true,
+  "sponsorsUnchanged": true,
+  "sponsorshipPositions": [
+    "SponsoredSample sponsor — leaderboard",
+    "SponsoredSample sponsor — featured",
+    "SponsoredSample sponsor — category",
+    "SponsoredSample sponsor — in-content",
+    "SponsoredSample sponsor — supporting",
+    "SponsoredSample sponsor — footer"
+  ],
+  "stagingBusinessPosts": 0,
+  "stagingBblCategories": 0,
+  "productionModified": false,
+  "permalinkSettingsChanged": false,
+  "scopedEntrySha256": "4e642c6e840b4d01a73117a324a469905f71d9dfa2500417054fc9d8a58c5e1d"
+}
