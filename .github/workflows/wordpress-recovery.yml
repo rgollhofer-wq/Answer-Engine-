@@ -24,5 +24,6 @@ jobs:
           php tests/wordpress/engine.php
           php tests/wordpress/plugin.php
           php tests/wordpress/route.php
+          php tests/wordpress/persistence.php
           node --check wordpress/bbl-answer-engine-mvp/sammy.js
           node --test tests/wordpress/interface.checks.cjs

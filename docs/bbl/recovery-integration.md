@@ -68,7 +68,9 @@ Additional navigation gaps: the production footer's configured `/washington/lynn
 
 ## Validation and limits
 
-- PHP 8.4.28: four plugin files pass syntax checks; 23 engine checks, 14 WordPress boundary checks and 5 scoped route checks pass.
+- PHP 8.4.28: four plugin files pass syntax checks; 23 engine checks, 14 WordPress boundary checks and 8 scoped route checks pass locally (12 on symlink-capable Linux); 8 separate-process persistence/admin checks also pass.
 - Node: three interface tests pass; syntax check passes. Tests cover retained context, user isolation, invalid/expired evidence, no inventory fabrication, no sponsored ranking effect, consent, stale requests, unverified providers, no email by default, idempotency, scoped route preservation and text-safe rendering.
 - The existing Fastify suite has five passing tests; its answer suite cannot load the ungenerated Prisma client. `prisma generate` fails P1012 because the existing Prisma 5 SQLite schema declares three Json fields. The existing TypeScript build also reports Redis, logger and confidence-narrowing errors. These files are unchanged by this PR; the WordPress plugin does not depend on that backend.
 - No live AI request was sent during this read-only recovery. No new runtime changes have been deployed. Passing isolated contracts does not substitute for approved staging end-to-end deployment verification.
+
+See [staging execution and approval package](staging-execution.md) for the subsequent installer correction, live conversation observations, exact patch, and rollback.

@@ -1,0 +1,12 @@
+[
+  {
+    "target": "backed-by-local/wp-content/plugins/bbl-answer-engine-mvp/bbl-answer-engine-mvp.php",
+    "before_sha256": "ffd1a0a2b7a80020ac892797e7847ab2f15616641b0d0a0cd2d31facd7108632",
+    "after_sha256": "06b8a3f567c0f86a21b4c22a42b51aafb4a27268157a665e26499bd8d1cf4c91"
+  },
+  {
+    "target": "backed-by-local/wp-content/plugins/bbl-answer-engine-mvp/route.php",
+    "before_sha256": "aed1c80de9eb8f24fb3724cff1bd61c8a03e825487f345946b3bb0e730a11ebb",
+    "after_sha256": "155b259a832ae5f51f9cb5972e773d3b466a4654e5fb593b2fe82dcb19bc2028"
+  }
+]
