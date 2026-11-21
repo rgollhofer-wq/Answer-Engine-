@@ -1,0 +1,32 @@
+[
+  {
+    "path": "staging/bbl-answer-engine-mvp.php",
+    "bytes": 11946,
+    "sha256": "ffd1a0a2b7a80020ac892797e7847ab2f15616641b0d0a0cd2d31facd7108632"
+  },
+  {
+    "path": "staging/demo.php",
+    "bytes": 3437,
+    "sha256": "59fe9517a3e73cdc82a21a678b2ad5d4a4b4b88820e1fb266ca7b3bb5bec7b2a"
+  },
+  {
+    "path": "staging/engine.php",
+    "bytes": 5748,
+    "sha256": "dd79dec91a2837c2806f25a28a79128a91660f458aaf3376313bbe811414fc51"
+  },
+  {
+    "path": "staging/route.php",
+    "bytes": 1700,
+    "sha256": "aed1c80de9eb8f24fb3724cff1bd61c8a03e825487f345946b3bb0e730a11ebb"
+  },
+  {
+    "path": "staging/sammy.css",
+    "bytes": 2193,
+    "sha256": "5ceac4f9ca330a9afa137f4847e9b5496ed046b3e6be772928d91bc2b55910de"
+  },
+  {
+    "path": "staging/sammy.js",
+    "bytes": 3760,
+    "sha256": "729e2fc174f491280f404559a8725d8444bfa8c0f0e8dc2ed308481f75c679b9"
+  }
+]
